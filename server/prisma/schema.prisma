@@ -1,0 +1,198 @@
+// Pet Shop Business Software - Database Schema
+// Provider is SQLite for zero-config local/dev use.
+// Swap `provider`/`url` to "postgresql" + a DATABASE_URL for production
+// (Postgres supports native enums; SQLite does not, so enum-like fields
+// below are plain Strings validated at the API layer with zod).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Role: ADMIN | MANAGER | STAFF
+// PurchaseOrderStatus: DRAFT | ORDERED | RECEIVED | CANCELLED
+// SaleStatus: COMPLETED | REFUNDED | VOID
+// PaymentMethod: CASH | CARD | ONLINE | STORE_CREDIT
+// AppointmentStatus: SCHEDULED | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("STAFF")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sales         Sale[]
+  appointments  Appointment[] @relation("StaffAppointments")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pets         Pet[]
+  sales        Sale[]
+  appointments Appointment[]
+}
+
+model Pet {
+  id        String    @id @default(cuid())
+  name      String
+  species   String
+  breed     String?
+  sex       String?
+  dob       DateTime?
+  weightKg  Float?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  appointments Appointment[]
+}
+
+model Category {
+  id   String @id @default(cuid())
+  name String @unique
+
+  products Product[]
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  createdAt   DateTime @default(now())
+
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  sku             String   @unique
+  name            String
+  description     String?
+  costPrice       Float
+  sellPrice       Float
+  quantity        Int      @default(0)
+  reorderLevel    Int      @default(5)
+  imageUrl        String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  saleItems         SaleItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  stockMovements     StockMovement[]
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  change    Int // positive = stock in, negative = stock out
+  reason    String // SALE, PURCHASE, ADJUSTMENT, RETURN, INITIAL_STOCK
+  createdAt DateTime @default(now())
+}
+
+model PurchaseOrder {
+  id         String    @id @default(cuid())
+  supplierId String
+  supplier   Supplier  @relation(fields: [supplierId], references: [id])
+  status     String    @default("DRAFT")
+  orderDate  DateTime  @default(now())
+  receivedAt DateTime?
+  notes      String?
+
+  items PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Int
+  unitCost        Float
+}
+
+model Sale {
+  id            String   @id @default(cuid())
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  status        String   @default("COMPLETED")
+  paymentMethod String   @default("CASH")
+  subtotal      Float
+  discount      Float    @default(0)
+  tax           Float    @default(0)
+  total         Float
+  createdAt     DateTime @default(now())
+
+  items SaleItem[]
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+  subtotal  Float
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  durationMin Int      @default(30)
+  active      Boolean  @default(true)
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  petId      String
+  pet        Pet      @relation(fields: [petId], references: [id])
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id])
+  staffId    String?
+  staff      User?    @relation("StaffAppointments", fields: [staffId], references: [id])
+  startAt    DateTime
+  status     String   @default("SCHEDULED")
+  notes      String?
+  createdAt  DateTime @default(now())
+}

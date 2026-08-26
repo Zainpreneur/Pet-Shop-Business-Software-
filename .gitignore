@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+
+# SQLite dev database
+server/prisma/dev.db
+server/prisma/dev.db-journal
+
+# Vite
+client/dist/
+client/.vite/
